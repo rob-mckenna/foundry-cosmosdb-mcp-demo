@@ -1,0 +1,26 @@
+{
+  "$comment": "Placeholder-only server-side wiring contract. Use this to document your remote MCP host configuration without committing real values. This file is intentionally not runnable as-is.",
+  "remoteServer": {
+    "baseUrl": "https://<remote-mcp-host>/mcp",
+    "healthUrl": "https://<remote-mcp-host>/healthz",
+    "authMode": "<entra-id|managed-identity|bearer-token>"
+  },
+  "identity": {
+    "tenantId": "<tenant-id>",
+    "principalId": "<managed-identity-or-app-registration-object-id>"
+  },
+  "cosmos": {
+    "accountName": "<cosmos-account>",
+    "accountEndpoint": "https://<cosmos-account>.documents.azure.com:443/",
+    "database": "<database>",
+    "container": "<container>",
+    "vectorProperty": "<vector-property>"
+  },
+  "embeddings": {
+    "provider": "<azure-ai-foundry|azure-openai>",
+    "foundryProjectEndpoint": "https://<foundry-resource>.services.ai.azure.com/api/projects/<foundry-project>",
+    "openAiEndpoint": "https://<openai-resource>.openai.azure.com/",
+    "deployment": "<embedding-deployment>",
+    "dimensions": "<embedding-dimensions-or-empty>"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$comment": "Placeholder-only example. Replace every <placeholder> and environment-variable reference before use. This file is intentionally not runnable as-is.",
+  "mcpServers": {
+    "foundry-cosmos-remote": {
+      "transport": {
+        "type": "streamable-http",
+        "url": "https://<remote-mcp-host>/mcp",
+        "headers": {
+          "Authorization": "Bearer ${REMOTE_MCP_BEARER_TOKEN}"
+        }
+      },
+      "metadata": {
+        "purpose": "Remote MCP demo wiring for Foundry and Cosmos DB",
+        "cosmosAccount": "<cosmos-account>",
+        "cosmosDatabase": "<database>",
+        "cosmosContainer": "<container>",
+        "vectorProperty": "<vector-property>",
+        "embeddingProvider": "<azure-ai-foundry-or-azure-openai>",
+        "foundryProjectEndpoint": "https://<foundry-resource>.services.ai.azure.com/api/projects/<foundry-project>",
+        "openAiEndpoint": "https://<openai-resource>.openai.azure.com/",
+        "embeddingDeployment": "<embedding-deployment>"
+      }
+    }
+  }
+}

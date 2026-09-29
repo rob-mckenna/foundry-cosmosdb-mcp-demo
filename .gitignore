@@ -1,0 +1,39 @@
+# Squad: ignore runtime state (logs, inbox, sessions)
+# Note: .squad/casting/* is identity and MUST be committed to main, not ignored
+.squad/orchestration-log/
+.squad/log/
+.squad/decisions/inbox/
+.squad/sessions/
+.squad/.scratch/
+.squad/.cache/
+# Squad: SubSquad activation file (local to this machine)
+.squad-workstream
+
+# Public-demo safety: ignore local secrets and local-only MCP overrides
+.env
+.env.*
+*.env.local
+*.env.private
+!.env.example
+!.env.sample
+!.env.template
+scripts/seeder.env
+scripts/seeder.env.*
+!scripts/seeder.env.example
+templates/mcp/*.env.local
+templates/mcp/*.env.private
+.mcp.local.json
+.copilot/*.local.json
+deployment-info.json
+
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+*.py[cod]
+*.pyo
+*.pyd
+build/
+dist/
+*.egg-info/
+/infra/main.json

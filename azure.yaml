@@ -1,0 +1,16 @@
+name: foundry-cosmosdb-mcp-demo
+metadata:
+  template: foundry-cosmosdb-mcp-demo@0.1.0
+infra:
+  provider: bicep
+  path: infra
+hooks:
+  postprovision:
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "Provisioning finished. Next: export values in your shell or copy placeholders from scripts\seeder.env.example to ignored .env.local, then run python .\scripts\seed_synthetic_data.py."
+    posix:
+      shell: sh
+      run: |
+        echo "Provisioning finished. Next: export values in your shell or copy placeholders from scripts/seeder.env.example to ignored .env.local, then run python ./scripts/seed_synthetic_data.py."
