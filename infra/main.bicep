@@ -26,6 +26,16 @@ param embeddingModelVersion string = '1'
 @minValue(1)
 param embeddingDeploymentCapacity int = 200
 
+@description('Chat model deployment used by the Foundry MCP agent sample.')
+param chatDeploymentName string = 'gpt-4.1-mini'
+
+@description('Model version for the chat deployment.')
+param chatModelVersion string = '2025-04-14'
+
+@description('Capacity units for the chat deployment.')
+@minValue(1)
+param chatDeploymentCapacity int = 10
+
 @description('Max autoscale throughput for the Cosmos DB vector-search container.')
 @minValue(1000)
 param cosmosContainerMaxThroughput int = 4000
@@ -43,6 +53,7 @@ var cosmosContainerName = 'guidance'
 var virtualNetworkName = 'vnet-${normalizedEnvironment}-${uniqueSuffix}'
 var workloadSubnetName = 'workload'
 var privateEndpointSubnetName = 'private-endpoints'
+var containerAppsSubnetName = 'container-apps'
 var foundryProjectEndpoint = 'https://${aiFoundryName}.services.ai.azure.com/api/projects/${aiProjectName}'
 var openAiEndpoint = 'https://${aiFoundryName}.openai.azure.com/'
 var openAiCompatibleBaseUrl = '${openAiEndpoint}openai/v1/'
@@ -57,6 +68,10 @@ var baseTags = union(
 var openAiUserRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+)
+var foundryUserRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 )
 var cosmosDataContributorRoleDefinitionId = '00000000-0000-0000-0000-000000000002'
 var shouldAssignLocalDeveloper = !empty(localDeveloperPrincipalId)
@@ -114,6 +129,27 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   tags: baseTags
   dependsOn: [
     aiProject
+  ]
+}
+
+resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  name: chatDeploymentName
+  parent: aiFoundry
+  sku: {
+    name: 'GlobalStandard'
+    capacity: chatDeploymentCapacity
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-4.1-mini'
+      version: chatModelVersion
+    }
+    versionUpgradeOption: 'NoAutoUpgrade'
+  }
+  tags: baseTags
+  dependsOn: [
+    embeddingDeployment
   ]
 }
 
@@ -242,6 +278,23 @@ resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' = {
           privateEndpointNetworkPolicies: 'Disabled'
         }
       }
+      {
+        name: containerAppsSubnetName
+        properties: {
+          addressPrefix: '10.42.4.0/23'
+          delegations: [
+            {
+              name: 'container-apps'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
+          natGateway: {
+            id: seederNatGateway.id
+          }
+        }
+      }
     ]
   }
   tags: baseTags
@@ -342,7 +395,7 @@ resource projectOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' 
     principalType: 'ServicePrincipal'
   }
   dependsOn: [
-    embeddingDeployment
+    chatDeployment
   ]
 }
 
@@ -354,7 +407,19 @@ resource localDeveloperOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-
     principalId: localDeveloperPrincipalId
   }
   dependsOn: [
-    embeddingDeployment
+    chatDeployment
+  ]
+}
+
+resource localDeveloperFoundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (shouldAssignLocalDeveloper) {
+  name: guid(aiProject.id, localDeveloperPrincipalId, foundryUserRoleDefinitionId)
+  scope: aiProject
+  properties: {
+    roleDefinitionId: foundryUserRoleDefinitionId
+    principalId: localDeveloperPrincipalId
+  }
+  dependsOn: [
+    chatDeployment
   ]
 }
 
@@ -388,6 +453,7 @@ output openAiEndpoint string = openAiEndpoint
 output openAiCompatibleBaseUrl string = openAiCompatibleBaseUrl
 output embeddingDeploymentOutputName string = embeddingDeployment.name
 output embeddingDimensions int = 1536
+output chatDeploymentOutputName string = chatDeployment.name
 output cosmosAccountOutputName string = cosmosAccount.name
 output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
 output cosmosDatabaseOutputName string = guidanceDatabase.name
@@ -400,6 +466,11 @@ output workloadSubnetResourceId string = resourceId(
   virtualNetwork.name,
   workloadSubnetName
 )
+output containerAppsSubnetResourceId string = resourceId(
+  'Microsoft.Network/virtualNetworks/subnets',
+  virtualNetwork.name,
+  containerAppsSubnetName
+)
 output localDeveloperRbacConfigured bool = shouldAssignLocalDeveloper
 output seederEnvironmentHints object = {
   AZURE_COSMOSDB_CONTAINER_NAME: guidanceContainer.name
@@ -407,6 +478,7 @@ output seederEnvironmentHints object = {
   AZURE_COSMOSDB_ENDPOINT: cosmosAccount.properties.documentEndpoint
   AZURE_OPENAI_BASE_URL: openAiCompatibleBaseUrl
   AZURE_OPENAI_EMBEDDING_DEPLOYMENT: embeddingDeployment.name
+  MODEL_DEPLOYMENT_NAME: chatDeployment.name
   FOUNDRY_PROJECT_ENDPOINT: foundryProjectEndpoint
   OPENAI_ENDPOINT: openAiEndpoint
 }

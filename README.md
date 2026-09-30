@@ -7,6 +7,7 @@ Public, customer-agnostic Microsoft Foundry + Azure Cosmos DB MCP vector-search 
 - `azure.yaml` plus `infra/main.bicep` and `infra/main.parameters.json` for:
   - a Microsoft Foundry resource and project
   - a `text-embedding-3-small` deployment
+  - a `gpt-4.1-mini` deployment for the Foundry MCP agent
   - a Cosmos DB for NoSQL account, database, and container
   - `/embedding` vector policy with `diskANN`
   - managed identity and RBAC assignments for secretless auth
@@ -47,7 +48,7 @@ with /embedding vectors        query-time vector generation
 - **Foundry project endpoint**: `https://<resource>.services.ai.azure.com/api/projects/<project>`.
 - **Embeddings**: `text-embedding-3-small`, sized for **1536 dimensions**.
 - **Cosmos DB**: NoSQL account with `EnableNoSQLVectorSearch`, local auth disabled, and a `guidance` container that stores vectors on `/embedding`.
-- **Private connectivity**: Cosmos DB public access is disabled; a VNet, private endpoint, and `privatelink.documents.azure.com` DNS zone provide the data path for Azure-hosted workloads.
+- **Private connectivity**: Cosmos DB public access is disabled; a VNet, private endpoint, `privatelink.documents.azure.com` DNS zone, and delegated Container Apps subnet provide the data path for Azure-hosted workloads.
 - **RBAC**:
   - Foundry project managed identity
   - optional deployer principal assignment for local seeding
@@ -78,7 +79,6 @@ with /embedding vectors        query-time vector generation
 - Azure CLI with Bicep support if you want to build or deploy the infra locally
 - Azure Developer CLI (`azd`) if you want to use the included `azure.yaml`
 - an Azure subscription if you plan to provision resources
-- a chat-capable model deployment for the optional Foundry agent sample
 
 No Azure credentials are required for CI or the offline unit tests.
 
@@ -90,6 +90,7 @@ The Bicep template provisions:
    - `Microsoft.CognitiveServices/accounts@2025-06-01`
    - `Microsoft.CognitiveServices/accounts/projects@2025-06-01`
    - `Microsoft.CognitiveServices/accounts/deployments@2025-06-01`
+   - `text-embedding-3-small` and `gpt-4.1-mini` deployments
 2. **Cosmos DB for NoSQL**
    - `Microsoft.DocumentDB/databaseAccounts@2024-11-15`
    - `EnableNoSQLVectorSearch`
@@ -190,6 +191,8 @@ python .\scripts\run_foundry_mcp_agent.py
 
 The default question asks for synthetic asthma exercise guidance. A successful run creates a Foundry agent version, invokes MCPToolKit's Cosmos DB tools, and prints a synthesis of the closest fictional records.
 
+The Foundry remote-tool connection target must include the `/mcp` path. See the setup runbook if Foundry reaches the Container App root path and reports an initialization timeout.
+
 ### Exact current Azure MCP CLI vector-search example
 
 The verbatim current Microsoft Learn command is preserved in `docs/azure-mcp-cli-vector-search-example.md`:
@@ -264,7 +267,7 @@ Actual ranking varies with the deployed model and seeded count; the repository d
 
 - This is an educational demo, not a clinical system or a source of medical advice.
 - All records are deterministic synthetic examples; no PHI or customer data belongs in the repository.
-- Chat-model deployment availability differs by region, so the agent sample expects an existing chat deployment rather than provisioning one.
+- Model availability differs by region; adjust the Bicep model versions and deployment capacity if the defaults are unavailable in your subscription.
 - MCPToolKit is deployed and versioned independently; follow its release notes and security guidance.
 - Vector search quality is illustrative and is not evaluated for clinical accuracy.
 

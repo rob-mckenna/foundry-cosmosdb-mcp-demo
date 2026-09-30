@@ -15,7 +15,8 @@ No MCPToolKit source is vendored here. Clone and deploy the upstream project sep
    - `text-embedding-3-small` deployment
    - 1536 embedding dimensions
 5. Keep the toolkit-generated `deployment-info.json` private. It contains environment-specific identifiers and must not be copied into this repository.
-6. From the MCPToolKit clone, create the Foundry managed-identity connection:
+6. Before creating the Foundry connection, verify that the private `MCP_SERVER_URI` value ends in `/mcp`. Some Toolkit releases emit only the Container App base URL; Foundry then posts initialization requests to `/` and times out.
+7. From the MCPToolKit clone, create the Foundry managed-identity connection:
 
    ```powershell
    .\scripts\Setup-AIFoundry-Connection.ps1 `
@@ -24,9 +25,9 @@ No MCPToolKit source is vendored here. Clone and deploy the upstream project sep
    ```
 
    The upstream script reads the MCP target URL and Entra audience from its private `deployment-info.json`, creates a `ProjectManagedIdentity` remote-tool connection, and grants the Foundry project identity the toolkit app role.
-7. Add a chat model deployment to the Foundry resource and set `MODEL_DEPLOYMENT_NAME` to that deployment. The infrastructure in this repo intentionally deploys only the embedding model because chat-model availability varies by region and subscription.
-8. Copy `templates/mcp/remote-foundry-cosmos.env.template` to a private, ignored file or export the values in your shell.
-9. Run the Foundry agent sample:
+8. Set `MODEL_DEPLOYMENT_NAME` to the `gpt-4.1-mini` deployment provisioned by this repository.
+9. Copy `templates/mcp/remote-foundry-cosmos.env.template` to a private, ignored file or export the values in your shell.
+10. Run the Foundry agent sample:
 
    ```powershell
    python .\scripts\run_foundry_mcp_agent.py
@@ -77,6 +78,7 @@ Other useful prompts:
 
 - **401/403 from the MCP server**: rerun the upstream Foundry connection setup and confirm the project managed identity received the toolkit app role.
 - **Foundry client 404**: use the current `services.ai.azure.com/api/projects/...` endpoint, not a legacy `api.azureml.ms` endpoint.
+- **Foundry reports MCP initialization timeout while direct MCP calls work**: inspect Container App logs. If Foundry sends `POST /`, update the project connection target to the full `https://<host>/mcp` URL.
 - **No vector results**: seed the container first and verify the toolkit uses `embedding`, `text-embedding-3-small`, and 1536 dimensions.
 - **Model deployment not found**: set `MODEL_DEPLOYMENT_NAME` to a chat-capable deployment available in the same Foundry resource.
 
