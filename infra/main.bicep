@@ -40,15 +40,24 @@ var aiProjectName = take('${aiFoundryName}-proj', 64)
 var cosmosAccountName = take('cosmos${normalizedEnvironment}${uniqueSuffix}', 44)
 var cosmosDatabaseName = 'care-guidance'
 var cosmosContainerName = 'guidance'
+var virtualNetworkName = 'vnet-${normalizedEnvironment}-${uniqueSuffix}'
+var workloadSubnetName = 'workload'
+var privateEndpointSubnetName = 'private-endpoints'
 var foundryProjectEndpoint = 'https://${aiFoundryName}.services.ai.azure.com/api/projects/${aiProjectName}'
 var openAiEndpoint = 'https://${aiFoundryName}.openai.azure.com/'
 var openAiCompatibleBaseUrl = '${openAiEndpoint}openai/v1/'
-var baseTags = union({
-  workload: 'synthetic-care-guidance'
-  sample: 'foundry-cosmosdb-mcp-demo'
-  authentication: 'entra-id-only'
-}, tags)
-var openAiUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
+var baseTags = union(
+  {
+    workload: 'synthetic-care-guidance'
+    sample: 'foundry-cosmosdb-mcp-demo'
+    authentication: 'entra-id-only'
+  },
+  tags
+)
+var openAiUserRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+)
 var cosmosDataContributorRoleDefinitionId = '00000000-0000-0000-0000-000000000002'
 var shouldAssignLocalDeveloper = !empty(localDeveloperPrincipalId)
 
@@ -103,6 +112,9 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
     versionUpgradeOption: 'NoAutoUpgrade'
   }
   tags: baseTags
+  dependsOn: [
+    aiProject
+  ]
 }
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
@@ -124,6 +136,8 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
     enableAutomaticFailover: false
     enableFreeTier: false
     enableMultipleWriteLocations: false
+    ipRules: []
+    isVirtualNetworkFilterEnabled: false
     locations: [
       {
         locationName: location
@@ -132,7 +146,7 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-11-15' = {
       }
     ]
     minimalTlsVersion: 'Tls12'
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
   }
   tags: baseTags
 }
@@ -202,6 +216,123 @@ resource guidanceContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/c
   }
 }
 
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' = {
+  name: virtualNetworkName
+  location: location
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        '10.42.0.0/16'
+      ]
+    }
+    subnets: [
+      {
+        name: workloadSubnetName
+        properties: {
+          addressPrefix: '10.42.0.0/24'
+          natGateway: {
+            id: seederNatGateway.id
+          }
+        }
+      }
+      {
+        name: privateEndpointSubnetName
+        properties: {
+          addressPrefix: '10.42.1.0/24'
+          privateEndpointNetworkPolicies: 'Disabled'
+        }
+      }
+    ]
+  }
+  tags: baseTags
+}
+
+resource seederNatPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
+  name: 'pip-seeder-nat-${uniqueSuffix}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+  tags: baseTags
+}
+
+resource seederNatGateway 'Microsoft.Network/natGateways@2024-05-01' = {
+  name: 'nat-seeder-${uniqueSuffix}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    idleTimeoutInMinutes: 10
+    publicIpAddresses: [
+      {
+        id: seederNatPublicIp.id
+      }
+    ]
+  }
+  tags: baseTags
+}
+
+resource cosmosPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+  name: 'privatelink.documents.azure.com'
+  location: 'global'
+}
+
+resource cosmosPrivateDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  name: 'link-${virtualNetworkName}'
+  parent: cosmosPrivateDnsZone
+  location: 'global'
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource cosmosPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
+  name: 'pe-${cosmosAccountName}'
+  location: location
+  properties: {
+    subnet: {
+      id: resourceId('Microsoft.Network/virtualNetworks/subnets', virtualNetwork.name, privateEndpointSubnetName)
+    }
+    privateLinkServiceConnections: [
+      {
+        name: 'cosmos-sql'
+        properties: {
+          privateLinkServiceId: cosmosAccount.id
+          groupIds: [
+            'Sql'
+          ]
+        }
+      }
+    ]
+  }
+  tags: baseTags
+  dependsOn: [
+    guidanceContainer
+  ]
+}
+
+resource cosmosPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = {
+  name: 'default'
+  parent: cosmosPrivateEndpoint
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'cosmos-sql-zone'
+        properties: {
+          privateDnsZoneId: cosmosPrivateDnsZone.id
+        }
+      }
+    ]
+  }
+}
+
 resource projectOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(aiFoundry.id, aiProject.name, 'project-openai-user')
   scope: aiFoundry
@@ -210,6 +341,9 @@ resource projectOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' 
     principalId: aiProject.identity.principalId
     principalType: 'ServicePrincipal'
   }
+  dependsOn: [
+    embeddingDeployment
+  ]
 }
 
 resource localDeveloperOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (shouldAssignLocalDeveloper) {
@@ -219,6 +353,9 @@ resource localDeveloperOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-
     roleDefinitionId: openAiUserRoleDefinitionId
     principalId: localDeveloperPrincipalId
   }
+  dependsOn: [
+    embeddingDeployment
+  ]
 }
 
 resource projectCosmosContributor 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
@@ -256,6 +393,13 @@ output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
 output cosmosDatabaseOutputName string = guidanceDatabase.name
 output cosmosContainerOutputName string = guidanceContainer.name
 output vectorEmbeddingPath string = '/embedding'
+output virtualNetworkOutputName string = virtualNetwork.name
+output workloadSubnetOutputName string = workloadSubnetName
+output workloadSubnetResourceId string = resourceId(
+  'Microsoft.Network/virtualNetworks/subnets',
+  virtualNetwork.name,
+  workloadSubnetName
+)
 output localDeveloperRbacConfigured bool = shouldAssignLocalDeveloper
 output seederEnvironmentHints object = {
   AZURE_COSMOSDB_CONTAINER_NAME: guidanceContainer.name

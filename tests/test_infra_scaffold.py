@@ -14,6 +14,11 @@ def test_bicep_declares_required_vector_and_embedding_shapes() -> None:
     assert "name: 'text-embedding-3-small'" in contents
     assert "disableLocalAuth: true" in contents
     assert ".services.ai.azure.com/api/projects/" in contents
+    assert "dependsOn:" in contents
+    assert "publicNetworkAccess: 'Disabled'" in contents
+    assert "privatelink.documents.azure.com" in contents
+    assert "Microsoft.Network/privateEndpoints" in contents
+    assert "Microsoft.Network/natGateways" in contents
 
 
 def test_azd_parameters_file_uses_standard_environment_variables() -> None:

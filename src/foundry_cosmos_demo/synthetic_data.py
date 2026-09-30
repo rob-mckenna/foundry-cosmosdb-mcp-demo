@@ -99,20 +99,20 @@ def build_synthetic_guidance_documents(count: int) -> list[dict]:
     documents: list[dict] = []
     signposts = cycle(SIGNPOSTS)
 
-    combinations: Iterable[tuple[str, str, str, str, str, str]] = product(
-        CONDITION_GROUPS.keys(),
+    combinations: Iterable[tuple[int, str, str, str, str, str]] = product(
+        range(10000),
         CARE_SETTINGS,
         POPULATIONS,
         GUIDANCE_INTENTS,
         RISK_LEVELS,
-        range(10000),
+        CONDITION_GROUPS.keys(),
     )
 
-    for ordinal, (condition_group, care_setting, population, intent, risk_level, sequence) in enumerate(
+    for ordinal, (sequence, care_setting, population, intent, risk_level, condition_group) in enumerate(
         combinations, start=1
     ):
         scenarios = CONDITION_GROUPS[condition_group]
-        scenario = scenarios[sequence % len(scenarios)]
+        scenario = scenarios[(sequence + ordinal - 1) % len(scenarios)]
         signpost = next(signposts)
         content = _compose_content(
             condition_group=condition_group,

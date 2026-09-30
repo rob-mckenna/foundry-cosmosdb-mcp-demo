@@ -47,6 +47,7 @@ with /embedding vectors        query-time vector generation
 - **Foundry project endpoint**: `https://<resource>.services.ai.azure.com/api/projects/<project>`.
 - **Embeddings**: `text-embedding-3-small`, sized for **1536 dimensions**.
 - **Cosmos DB**: NoSQL account with `EnableNoSQLVectorSearch`, local auth disabled, and a `guidance` container that stores vectors on `/embedding`.
+- **Private connectivity**: Cosmos DB public access is disabled; a VNet, private endpoint, and `privatelink.documents.azure.com` DNS zone provide the data path for Azure-hosted workloads.
 - **RBAC**:
   - Foundry project managed identity
   - optional deployer principal assignment for local seeding
@@ -147,7 +148,7 @@ python -m pip install --upgrade pip
 python -m pip install -e .[dev]
 ```
 
-Set the required environment variables from your deployed resources:
+Set the required environment variables from your deployed resources. Run the seeder from a workload with network access to the deployed VNet (for example, a temporary managed-identity VM or the eventual MCP host):
 
 ```powershell
 $env:AZURE_COSMOSDB_ENDPOINT = "https://<cosmos-account>.documents.azure.com:443/"
@@ -255,7 +256,8 @@ Actual ranking varies with the deployed model and seeded count; the repository d
 - Foundry model deployments consume quota and incur usage charges.
 - Deploying MCPToolKit adds Container Apps and Container Registry resources described by the upstream project.
 - Local authentication is disabled on Cosmos DB and the Foundry resource. Access uses Entra ID, managed identity, and RBAC.
-- Public network access remains enabled for demo simplicity. Production deployments should add private networking and organizational policy controls.
+- Cosmos DB public access is disabled and the template creates private endpoint/DNS connectivity.
+- The MCAPS deployment uses a private managed-identity VM for repeatable seeding. Deallocate it when idle to stop compute charges, then start it before a rerun.
 - The sample gives the optional deployer principal data-plane access for seeding. Omit `DEPLOYER_PRINCIPAL_ID` when local seeding is not required.
 
 ## Limitations
@@ -270,6 +272,23 @@ Actual ranking varies with the deployed model and seeded count; the repository d
 
 - **Bicep model deployment fails**: choose a region/model version available to the subscription and set `EMBEDDING_MODEL_VERSION`.
 - **Seeder returns 403**: confirm the signed-in identity has Cosmos DB Built-in Data Contributor and Cognitive Services OpenAI User.
+- **Seeder reports a Cosmos firewall error**: run it from the deployed VNet; the account intentionally rejects public traffic.
+
+### Persistent private seeder VM
+
+When subscription policy blocks public Cosmos DB access, keep a small VM in the workload subnet with no public IP. Assign its system-managed identity:
+
+- `Cognitive Services OpenAI User` on the Foundry project
+- `Cosmos DB Built-in Data Contributor` on the demo Cosmos account
+
+Use Azure VM Run Command to install this package and run `scripts/seed_synthetic_data.py`. Deallocate the VM between runs:
+
+```powershell
+az vm deallocate --resource-group <resource-group> --name <seeder-vm>
+az vm start --resource-group <resource-group> --name <seeder-vm>
+```
+
+Deallocation preserves the VM and managed identity while avoiding active compute charges. The attached OS disk and outbound NAT public IP continue to incur small charges.
 - **Foundry project 404**: use `https://<resource>.services.ai.azure.com/api/projects/<project>`, not a legacy endpoint.
 - **MCPToolKit returns 401/403**: recreate or verify the `ProjectManagedIdentity` connection and toolkit app-role assignment.
 - **Vector search returns no rows**: seed the data and verify the container vector path is `/embedding` with 1536 dimensions.

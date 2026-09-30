@@ -25,6 +25,7 @@ templates/mcp/*.env.private
 .mcp.local.json
 .copilot/*.local.json
 deployment-info.json
+.azure/
 
 # Python
 __pycache__/

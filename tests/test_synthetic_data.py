@@ -21,3 +21,38 @@ def test_embedding_inputs_capture_searchable_fields() -> None:
     assert documents[0]["title"] in payloads[0]
     assert documents[0]["summary"] in payloads[0]
     assert "tags:" in payloads[0]
+
+
+def test_default_matrix_is_diverse_before_repeating() -> None:
+    documents = build_synthetic_guidance_documents(960)
+
+    assert {document["conditionGroup"] for document in documents} == {
+        "cardiometabolic",
+        "respiratory",
+        "musculoskeletal",
+        "behavioral-health",
+        "preventive-care",
+    }
+    assert {document["careSetting"] for document in documents} == {
+        "primary-care",
+        "virtual-visit",
+        "urgent-care-triage",
+        "care-management",
+    }
+    assert {document["population"] for document in documents} == {
+        "adult",
+        "older-adult",
+        "working-parent",
+        "college-student",
+    }
+    assert {document["intent"] for document in documents} == {
+        "self-management",
+        "medication-education",
+        "follow-up-planning",
+        "escalation-triage",
+    }
+    assert {document["riskLevel"] for document in documents} == {
+        "routine",
+        "watchful",
+        "priority",
+    }
