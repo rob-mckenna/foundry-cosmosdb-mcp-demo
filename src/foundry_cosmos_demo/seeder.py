@@ -5,10 +5,11 @@ from typing import Iterable, Mapping, Sequence
 import argparse
 import json
 import os
+import time
 
 from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 from .config import SeederSettings
 from .synthetic_data import build_embedding_inputs, build_synthetic_guidance_documents
@@ -53,10 +54,22 @@ def generate_embeddings(
     payloads: Sequence[str],
     expected_dimensions: int,
     batch_size: int,
+    max_rate_limit_retries: int = 8,
 ) -> list[list[float]]:
     embeddings: list[list[float]] = []
     for batch in _chunked(payloads, batch_size):
-        response = client.embeddings.create(model=deployment_name, input=list(batch))
+        for attempt in range(max_rate_limit_retries + 1):
+            try:
+                response = client.embeddings.create(
+                    model=deployment_name, input=list(batch)
+                )
+                break
+            except RateLimitError as error:
+                if attempt == max_rate_limit_retries:
+                    raise
+                retry_after = error.response.headers.get("retry-after")
+                delay = float(retry_after) if retry_after else min(60.0, 2.0**attempt)
+                time.sleep(max(delay, 1.0))
         ordered_rows = sorted(response.data, key=lambda row: row.index)
         for row in ordered_rows:
             if len(row.embedding) != expected_dimensions:

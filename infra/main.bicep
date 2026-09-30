@@ -24,7 +24,7 @@ param embeddingModelVersion string = '1'
 
 @description('Capacity units for the embedding deployment.')
 @minValue(1)
-param embeddingDeploymentCapacity int = 8
+param embeddingDeploymentCapacity int = 200
 
 @description('Max autoscale throughput for the Cosmos DB vector-search container.')
 @minValue(1000)

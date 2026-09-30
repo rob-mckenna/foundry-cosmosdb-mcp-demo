@@ -12,6 +12,7 @@ def test_bicep_declares_required_vector_and_embedding_shapes() -> None:
     assert "type: 'diskANN'" in contents
     assert "dimensions: 1536" in contents
     assert "name: 'text-embedding-3-small'" in contents
+    assert "param embeddingDeploymentCapacity int = 200" in contents
     assert "disableLocalAuth: true" in contents
     assert ".services.ai.azure.com/api/projects/" in contents
     assert "dependsOn:" in contents
